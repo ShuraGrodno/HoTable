@@ -5,14 +5,29 @@
 #define bathRoomPin 7
 #define dimerPin 6
 
-volatile unsigned long zeroTime = 0;
-volatile bool zeroTrigger = false;
-unsigned long variablRezistor = 0;
-unsigned long impulsDelay = 0;
-unsigned long starChatterTime = 0;
-bool switchChatterDelay = false;
-bool switchChatterEnable = false;
+const unsigned long DELAY_START_MOTOR = 10UL * 60 * 1000;  //
 
+volatile unsigned long zeroTime = 0;                       //
+volatile bool zeroTrigger = false;                         //
+unsigned long variablRezistor = 0;                         //
+unsigned long impulsDelay = 0;                             //
+unsigned long startChatterTime = 0;                        // Переменная для фиксации времени нажатой кнопки чтобы сгладить дребезг
+bool switchChatterDelay = false;                           // Резрешение на отсчет времени задершки чтобы пропустить дребезг контактов
+bool switchChatterEnable = false;                          // Выходная переменная врлюченой клавиши после дребезга
+int fanSpeed = 0;                                          //
+
+//Режимы работы симистора для упровления вентилятором
+enum FanMode {
+  MAX,                                                      // Вентилятор на минимальных оборотах (Максисально тихо)
+  NORMAL,                                                   // Средние обороты вентилятора
+  MINI,                                                     // Максимальные обороты вентилятора
+  NOLL                                                      // Вентилятор выключен
+};
+
+FanMode curentMode = MAX;                                  // Выставляем первоначальное значение режима работы вентилятора
+
+
+//Функция обработки прерывания
 void zeroTriggerISR() {
   zeroTime = micros();
   zeroTrigger = true;
@@ -26,20 +41,36 @@ void setup() {
   attachInterrupt(0, zeroTriggerISR, RISING); //LOW,CHANGE,RISING,FALLING
 }
 
+//Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
 void chatterContact() {
   bool switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
   if (switchRoom && !switchChatterDelay) {
-    starChatterTime = millis();
+    startChatterTime = millis();
     switchChatterDelay = true; 
   }
-  else if ((millis() - starChatterTime) > 50 && switchChatterDelay) {
+  else if ((millis() - startChatterTime) > 50 && switchChatterDelay) {
     switchChatterEnable = switchRoom;
   }
+  if (switchChatterEnable && (millis() - startChatterTime) > DELAY_START_MOTOR) {
+    curentMode = MAX;
+  }
 }
-void loop() {
-  chatterContact();
 
-  if (zeroTrigger && (micros() - zeroTime) > variablRezistor) {
+//
+void simistorControl() {
+  switch (curentMode) {
+    case MAX:
+      fanSpeed = 0;
+    case NORMAL:
+      fanSpeed = 5000;
+    case MINI:
+      fanSpeed = 8000;
+    case NOLL:
+      fanSpeed = 10000;
+    default:
+      break;
+  }
+  if (switchChatterEnable && zeroTrigger && (micros() - zeroTime) > fanSpeed) {
     digitalWrite(dimerPin, HIGH);
     impulsDelay = micros();
     zeroTrigger = false;
@@ -47,5 +78,13 @@ void loop() {
   else if ((micros() - impulsDelay) > 350) {
     digitalWrite(dimerPin, LOW);
   }
+}
+
+
+void loop() {
+  chatterContact();
+  simistorControl();
+
+
 }
 
