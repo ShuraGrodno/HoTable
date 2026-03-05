@@ -1,11 +1,11 @@
 #include <Arduino.h>
 
-#define zeroPin 2
+#define zeroPin 2                                         //
 #define restRoomPin 4
 #define bathRoomPin 7
 #define dimerPin 6
 
-const unsigned long DELAY_START_MOTOR = 10UL * 60 * 1000;  //
+const unsigned long DELAY_START_MOTOR = 10UL;
 
 volatile unsigned long zeroTime = 0;                       //
 volatile bool zeroTrigger = false;                         //
@@ -14,7 +14,8 @@ unsigned long impulsDelay = 0;                             //
 unsigned long startChatterTime = 0;                        // Переменная для фиксации времени нажатой кнопки чтобы сгладить дребезг
 bool switchChatterDelay = false;                           // Резрешение на отсчет времени задершки чтобы пропустить дребезг контактов
 bool switchChatterEnable = false;                          // Выходная переменная врлюченой клавиши после дребезга
-int fanSpeed = 0;                                          //
+unsigned long fanSpeed = 0;                                          //
+bool oldStateSwitch = false;
 
 //Режимы работы симистора для упровления вентилятором
 enum FanMode {
@@ -24,7 +25,7 @@ enum FanMode {
   NOLL                                                      // Вентилятор выключен
 };
 
-FanMode curentMode = MAX;                                  // Выставляем первоначальное значение режима работы вентилятора
+FanMode curentMode = NOLL;                                   // Выставляем первоначальное значение режима работы вентилятора
 
 
 //Функция обработки прерывания
@@ -44,20 +45,23 @@ void setup() {
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
 void chatterContact() {
   bool switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
-  if (switchRoom && !switchChatterDelay) {
+  if (switchRoom != oldStateSwitch) {
     startChatterTime = millis();
-    switchChatterDelay = true; 
+    oldStateSwitch = switchRoom;
+    switchChatterDelay = true;
   }
-  else if ((millis() - startChatterTime) > 50 && switchChatterDelay) {
+  if (switchChatterDelay && (millis() - startChatterTime) > 10) {
     switchChatterEnable = switchRoom;
-  }
-  if (switchChatterEnable && (millis() - startChatterTime) > DELAY_START_MOTOR) {
-    curentMode = MAX;
+    switchChatterDelay = false;
   }
 }
 
 //
 void simistorControl() {
+
+  if (switchChatterEnable) {// && (millis() - startChatterTime) > DELAY_START_MOTOR) {
+    curentMode = MAX;
+  }
   switch (curentMode) {
     case MAX:
       fanSpeed = 0;
@@ -69,8 +73,8 @@ void simistorControl() {
       fanSpeed = 10000;
     default:
       break;
-  }
-  if (switchChatterEnable && zeroTrigger && (micros() - zeroTime) > fanSpeed) {
+    }
+  if (switchChatterEnable && zeroTrigger && (micros() - zeroTime) > 0) {
     digitalWrite(dimerPin, HIGH);
     impulsDelay = micros();
     zeroTrigger = false;
@@ -78,6 +82,7 @@ void simistorControl() {
   else if ((micros() - impulsDelay) > 350) {
     digitalWrite(dimerPin, LOW);
   }
+
 }
 
 
