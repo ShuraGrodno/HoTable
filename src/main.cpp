@@ -1,37 +1,35 @@
 #include <Arduino.h>
 
-#define zeroPin 2                                         //
+#define zeroPin 2
 #define restRoomPin 4
 #define bathRoomPin 7
 #define dimerPin 6
 
-const unsigned long DELAY_START_MOTOR = 10UL;
+const unsigned long DELAY_START_MOTOR = 1000UL;
+const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;
+const unsigned long DELAY_STOP_MOTOR = 1000UL;
 
-volatile unsigned long zeroTime = 0;                       //
-volatile bool zeroTrigger = false;                         //
-unsigned long variablRezistor = 0;                         //
-unsigned long impulsDelay = 0;                             //
-unsigned long startChatterTime = 0;                        // Переменная для фиксации времени нажатой кнопки чтобы сгладить дребезг
-bool switchChatterDelay = false;                           // Резрешение на отсчет времени задершки чтобы пропустить дребезг контактов
-bool switchChatterEnable = false;                          // Выходная переменная врлюченой клавиши после дребезга
-unsigned long fanSpeed = 0;                                          //
+volatile unsigned long zeroTime = 0;
+volatile bool zeroTriggerOn = false;
+bool zeroTriggerOff = false;
+unsigned long impulsDelay = 0;
+
+volatile bool switchChatterEnable = false;
+unsigned long startChatterTime = 0;
+bool switchChatterDelay = false;
 bool oldStateSwitch = false;
 
-//Режимы работы симистора для упровления вентилятором
-enum FanMode {
-  MAX,                                                      // Вентилятор на минимальных оборотах (Максисально тихо)
-  NORMAL,                                                   // Средние обороты вентилятора
-  MINI,                                                     // Максимальные обороты вентилятора
-  NOLL                                                      // Вентилятор выключен
-};
-
-FanMode curentMode = NOLL;                                   // Выставляем первоначальное значение режима работы вентилятора
-
+bool Fan = false;
+bool delayStopFan = false;
+unsigned long timeOffFan = 0UL;
+unsigned long fanSpeed = 0UL;
+unsigned long timeOnLight = 0UL;
+unsigned long timeOffLight = 0UL;
 
 //Функция обработки прерывания
 void zeroTriggerISR() {
   zeroTime = micros();
-  zeroTrigger = true;
+  zeroTriggerOn = true;
 }
 
 void setup() {
@@ -53,34 +51,44 @@ void chatterContact() {
   if (switchChatterDelay && (millis() - startChatterTime) > 10) {
     switchChatterEnable = switchRoom;
     switchChatterDelay = false;
+    if (switchChatterEnable) {
+      timeOnLight = millis();
+    }
+    else {
+      timeOffLight = millis();
+    }
   }
 }
 
 //
 void simistorControl() {
 
-  if (switchChatterEnable) {// && (millis() - startChatterTime) > DELAY_START_MOTOR) {
-    curentMode = MAX;
+  if (switchChatterEnable && (millis() - timeOnLight) > DELAY_START_MOTOR) {
+    Fan = true;
+    fanSpeed = 0UL;
   }
-  switch (curentMode) {
-    case MAX:
-      fanSpeed = 0;
-    case NORMAL:
-      fanSpeed = 5000;
-    case MINI:
-      fanSpeed = 8000;
-    case NOLL:
-      fanSpeed = 10000;
-    default:
-      break;
+  if (!switchChatterEnable && Fan && (millis() - timeOffLight) > DELAY_DOWNTURN_MOTOR) {
+    fanSpeed = 5000UL;
+    if (!delayStopFan) {
+      timeOffFan = millis();
     }
-  if (switchChatterEnable && zeroTrigger && (micros() - zeroTime) > 0) {
+    delayStopFan = true;
+  }
+  if (delayStopFan && (millis() - timeOffFan) > DELAY_STOP_MOTOR) {
+    delayStopFan = false; 
+    Fan = false;
+  }
+
+
+  if (Fan && zeroTriggerOn && (micros() - zeroTime) > fanSpeed) {
     digitalWrite(dimerPin, HIGH);
     impulsDelay = micros();
-    zeroTrigger = false;
+    zeroTriggerOn = false;
+    zeroTriggerOff = true;
   }
-  else if ((micros() - impulsDelay) > 350) {
+  if (zeroTriggerOff && (micros() - impulsDelay) > 350) {
     digitalWrite(dimerPin, LOW);
+    zeroTriggerOff = false;
   }
 
 }
