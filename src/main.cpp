@@ -3,21 +3,21 @@
 #define zeroPin 2
 #define restRoomPin 4
 #define bathRoomPin 7
-#define dimerPin 5
+#define dimerPin 6
 
 const unsigned long DELAY_START_MOTOR = 1000UL;
-const unsigned long DELAY_DOWNTURN_MOTOR = 10000UL;
-const unsigned long DELAY_STOP_MOTOR = 10000UL;
+const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;
+const unsigned long DELAY_STOP_MOTOR = 1000UL;
 
 volatile unsigned long zeroTime = 0;
 volatile bool zeroTriggerOn = false;
 bool zeroTriggerOff = false;
 unsigned long impulsDelay = 0;
 
-volatile bool switchChatterEnable = false;
-unsigned long startChatterTime = 0;
+bool switchChatterEnable = false;
 bool switchChatterDelay = false;
 bool oldStateSwitch = false;
+unsigned long startChatterTime = 0;
 
 bool Fan = false;
 bool delayStopFan = false;
@@ -26,6 +26,7 @@ unsigned long fanSpeed = 0UL;
 unsigned long timeOnLight = 0UL;
 unsigned long timeOffLight = 0UL;
 
+
 //Функция обработки прерывания
 void zeroTriggerISR() {
   zeroTime = micros();
@@ -33,12 +34,12 @@ void zeroTriggerISR() {
 }
 
 void setup() {
-  // Serial.begin(115200);
+  Serial.begin(115200);
   pinMode(zeroPin, INPUT);
   pinMode(restRoomPin, INPUT);
   pinMode(bathRoomPin, INPUT);
   pinMode(dimerPin, OUTPUT);
-  attachInterrupt(0, zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
+  attachInterrupt(0, zeroTriggerISR, RISING); //LOW,CHANGE,RISING,FALLING
 }
 
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
@@ -80,6 +81,7 @@ void simistorControl() {
     Fan = false;
   }
 
+
   if (Fan && zeroTriggerOn && (micros() - zeroTime) > fanSpeed) {
     digitalWrite(dimerPin, HIGH);
     impulsDelay = micros();
@@ -97,7 +99,6 @@ void simistorControl() {
 void loop() {
   chatterContact();
   simistorControl();
-
 
 }
 
