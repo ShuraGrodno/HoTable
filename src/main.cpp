@@ -3,7 +3,7 @@
 #define zeroPin 2
 #define restRoomPin 4
 #define bathRoomPin 7
-#define dimerPin 6
+#define dimerPin 5
 
 const unsigned long DELAY_START_MOTOR = 1000UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;
@@ -26,6 +26,23 @@ unsigned long fanSpeed = 0UL;
 unsigned long timeOnLight = 0UL;
 unsigned long timeOffLight = 0UL;
 
+bool oldStateTimer;
+bool timerComplet;
+unsigned long startinPointTimer;
+
+bool Timer(bool enable, unsigned long time) {
+  if (enable != oldStateTimer) {
+    startinPointTimer = millis();
+    oldStateTimer = enable;
+    if (!enable) {
+      timerComplet = false;
+    }
+  }
+  if (enable && !timerComplet && (millis() - startinPointTimer) > time) {
+    timerComplet = true;
+  }
+  return timerComplet;
+}
 
 //Функция обработки прерывания
 void zeroTriggerISR() {
@@ -39,7 +56,7 @@ void setup() {
   pinMode(restRoomPin, INPUT);
   pinMode(bathRoomPin, INPUT);
   pinMode(dimerPin, OUTPUT);
-  attachInterrupt(0, zeroTriggerISR, RISING); //LOW,CHANGE,RISING,FALLING
+  attachInterrupt(0, zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
 }
 
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
@@ -99,6 +116,6 @@ void simistorControl() {
 void loop() {
   chatterContact();
   simistorControl();
-
+  Serial.println(Timer(switchChatterEnable,1000UL));
 }
 
