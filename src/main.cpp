@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <D:\Developer\ArduinoProject\HoTable\lib\Timer.h>
 
 #define zeroPin 2
 #define restRoomPin 4
@@ -26,23 +27,27 @@ unsigned long fanSpeed = 0UL;
 unsigned long timeOnLight = 0UL;
 unsigned long timeOffLight = 0UL;
 
-bool oldStateTimer;
-bool timerComplet;
-unsigned long startinPointTimer;
+Timer Timer1;
+Timer Timer2;
+Timer Timer3;
 
-bool Timer(bool enable, unsigned long time) {
-  if (enable != oldStateTimer) {
-    startinPointTimer = millis();
-    oldStateTimer = enable;
-    if (!enable) {
-      timerComplet = false;
-    }
-  }
-  if (enable && !timerComplet && (millis() - startinPointTimer) > time) {
-    timerComplet = true;
-  }
-  return timerComplet;
-}
+// bool oldStateTimer;
+// bool timerComplet;
+// unsigned long startinPointTimer;
+
+// bool Timer(bool enable, unsigned long time) {
+//   if (enable != oldStateTimer) {
+//     startinPointTimer = millis();
+//     oldStateTimer = enable;
+//     if (!enable) {
+//       timerComplet = false;
+//     }
+//   }
+//   if (enable && !timerComplet && (millis() - startinPointTimer) > time) {
+//     timerComplet = true;
+//   }
+//   return timerComplet;
+// }
 
 //Функция обработки прерывания
 void zeroTriggerISR() {
@@ -81,19 +86,15 @@ void chatterContact() {
 
 //
 void simistorControl() {
-
-  if (switchChatterEnable && (millis() - timeOnLight) > DELAY_START_MOTOR) {
+  if (Timer1.check(switchChatterEnable, DELAY_START_MOTOR)) {//(switchChatterEnable && (millis() - timeOnLight) > DELAY_START_MOTOR) {
     Fan = true;
     fanSpeed = 0UL;
   }
-  if (!switchChatterEnable && Fan && (millis() - timeOffLight) > DELAY_DOWNTURN_MOTOR) {
+  if (Timer2.check(!switchChatterEnable && Fan, DELAY_DOWNTURN_MOTOR)) {//(!switchChatterEnable && Fan && (millis() - timeOffLight) > DELAY_DOWNTURN_MOTOR) {
     fanSpeed = 5000UL;
-    if (!delayStopFan) {
-      timeOffFan = millis();
-    }
     delayStopFan = true;
   }
-  if (delayStopFan && (millis() - timeOffFan) > DELAY_STOP_MOTOR) {
+  if (Timer3.check(delayStopFan, DELAY_STOP_MOTOR)) {//(delayStopFan && (millis() - timeOffFan) > DELAY_STOP_MOTOR) {
     delayStopFan = false; 
     Fan = false;
   }
@@ -116,6 +117,6 @@ void simistorControl() {
 void loop() {
   chatterContact();
   simistorControl();
-  Serial.println(Timer(switchChatterEnable,1000UL));
+  // Serial.println(Fan);
 }
 
