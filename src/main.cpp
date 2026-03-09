@@ -31,24 +31,6 @@ Timer Timer1;
 Timer Timer2;
 Timer Timer3;
 
-// bool oldStateTimer;
-// bool timerComplet;
-// unsigned long startinPointTimer;
-
-// bool Timer(bool enable, unsigned long time) {
-//   if (enable != oldStateTimer) {
-//     startinPointTimer = millis();
-//     oldStateTimer = enable;
-//     if (!enable) {
-//       timerComplet = false;
-//     }
-//   }
-//   if (enable && !timerComplet && (millis() - startinPointTimer) > time) {
-//     timerComplet = true;
-//   }
-//   return timerComplet;
-// }
-
 //Функция обработки прерывания
 void zeroTriggerISR() {
   zeroTime = micros();
@@ -86,15 +68,15 @@ void chatterContact() {
 
 //
 void simistorControl() {
-  if (Timer1.check(switchChatterEnable, DELAY_START_MOTOR)) {//(switchChatterEnable && (millis() - timeOnLight) > DELAY_START_MOTOR) {
+  if (Timer1.check(switchChatterEnable, DELAY_START_MOTOR)) {
     Fan = true;
     fanSpeed = 0UL;
   }
-  if (Timer2.check(!switchChatterEnable && Fan, DELAY_DOWNTURN_MOTOR)) {//(!switchChatterEnable && Fan && (millis() - timeOffLight) > DELAY_DOWNTURN_MOTOR) {
+  if (Timer2.check(!switchChatterEnable && Fan, DELAY_DOWNTURN_MOTOR)) {
     fanSpeed = 5000UL;
     delayStopFan = true;
   }
-  if (Timer3.check(delayStopFan, DELAY_STOP_MOTOR)) {//(delayStopFan && (millis() - timeOffFan) > DELAY_STOP_MOTOR) {
+  if (Timer3.check(delayStopFan, DELAY_STOP_MOTOR)) {
     delayStopFan = false; 
     Fan = false;
   }
