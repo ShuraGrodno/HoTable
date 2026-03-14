@@ -9,6 +9,7 @@
 const unsigned long DELAY_START_MOTOR = 1000UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;
 const unsigned long DELAY_STOP_MOTOR = 1000UL;
+const unsigned long DELAY_SWITCH_CHATTER = 10UL;
 
 volatile unsigned long zeroTime = 0;
 volatile bool zeroTriggerOn = false;
@@ -18,18 +19,15 @@ unsigned long impulsDelay = 0;
 bool switchChatterEnable = false;
 bool switchChatterDelay = false;
 bool oldStateSwitch = false;
-unsigned long startChatterTime = 0;
 
 bool Fan = false;
 bool delayStopFan = false;
-unsigned long timeOffFan = 0UL;
 unsigned long fanSpeed = 0UL;
-unsigned long timeOnLight = 0UL;
-unsigned long timeOffLight = 0UL;
 
-Timer Timer1;
-Timer Timer2;
-Timer Timer3;
+Timer timerOnFan;
+Timer timerSpeedChange;
+Timer timerOffFan;
+Timer timerSwitchChatter;
 
 //Функция обработки прерывания
 void zeroTriggerISR() {
@@ -50,33 +48,27 @@ void setup() {
 void chatterContact() {
   bool switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
   if (switchRoom != oldStateSwitch) {
-    startChatterTime = millis();
     oldStateSwitch = switchRoom;
     switchChatterDelay = true;
   }
-  if (switchChatterDelay && (millis() - startChatterTime) > 10) {
+  if (timerSwitchChatter.check(switchChatterDelay, DELAY_SWITCH_CHATTER)) {
     switchChatterEnable = switchRoom;
     switchChatterDelay = false;
-    if (switchChatterEnable) {
-      timeOnLight = millis();
-    }
-    else {
-      timeOffLight = millis();
-    }
   }
 }
 
 //
 void simistorControl() {
-  if (Timer1.check(switchChatterEnable, DELAY_START_MOTOR)) {
+
+  if (timerOnFan.check(switchChatterEnable, DELAY_START_MOTOR)) {
     Fan = true;
     fanSpeed = 0UL;
   }
-  if (Timer2.check(!switchChatterEnable && Fan, DELAY_DOWNTURN_MOTOR)) {
+  if (timerSpeedChange.check(!switchChatterEnable, DELAY_DOWNTURN_MOTOR)) {
     fanSpeed = 5000UL;
     delayStopFan = true;
   }
-  if (Timer3.check(delayStopFan, DELAY_STOP_MOTOR)) {
+  if (timerOffFan.check(!switchChatterEnable && delayStopFan, DELAY_STOP_MOTOR)) {
     delayStopFan = false; 
     Fan = false;
   }
