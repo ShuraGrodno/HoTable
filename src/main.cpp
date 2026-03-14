@@ -59,12 +59,16 @@ void chatterContact() {
 
 //
 void simistorControl() {
-
-  if (timerOnFan.check(switchChatterEnable, DELAY_START_MOTOR)) {
+  if (switchChatterEnable && Fan) {
+    fanSpeed = 0UL;
+    delayStopFan = false;
+    timerSpeedChange.reset();
+  }
+  if (timerOnFan.check(switchChatterEnable && !Fan, DELAY_START_MOTOR)) {
     Fan = true;
     fanSpeed = 0UL;
   }
-  if (timerSpeedChange.check(!switchChatterEnable, DELAY_DOWNTURN_MOTOR)) {
+  if (timerSpeedChange.check(!switchChatterEnable && Fan, DELAY_DOWNTURN_MOTOR)) {
     fanSpeed = 5000UL;
     delayStopFan = true;
   }
