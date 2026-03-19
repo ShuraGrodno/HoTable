@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <D:\Developer\ArduinoProject\HoTable\lib\Timer.h>
+#include <Timer.h>
 
 #define zeroPin 2
 #define restRoomPin 4
@@ -9,6 +9,7 @@
 const unsigned long DELAY_START_MOTOR = 1000UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;
 const unsigned long DELAY_STOP_MOTOR = 1000UL;
+const unsigned long MAX_TIME_WORK_FAN = 10000UL;
 const unsigned long DELAY_SWITCH_CHATTER = 10UL;
 
 volatile unsigned long zeroTime = 0;
@@ -21,12 +22,16 @@ bool switchChatterDelay = false;
 bool oldStateSwitch = false;
 
 bool Fan = false;
+bool onFan = false;
+bool offFan = false;
 bool delayStopFan = false;
+bool maxWorkFan = false;
 unsigned long fanSpeed = 0UL;
 
 Timer timerOnFan;
 Timer timerSpeedChange;
 Timer timerOffFan;
+Timer timerMaxWorkFan;
 Timer timerSwitchChatter;
 
 //Функция обработки прерывания
@@ -46,38 +51,53 @@ void setup() {
 
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
 void chatterContact() {
+  //Активировать Переменную от любой включеной кнопки
   bool switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
+  //Опрос состояния контактов
   if (switchRoom != oldStateSwitch) {
     oldStateSwitch = switchRoom;
-    switchChatterDelay = true;
+    switchChatterDelay = true;//Активировать таймер
   }
+  //Запустить таймен задержки дребезга
   if (timerSwitchChatter.check(switchChatterDelay, DELAY_SWITCH_CHATTER)) {
-    switchChatterEnable = switchRoom;
-    switchChatterDelay = false;
+    switchChatterEnable = switchRoom;//ПРинять на выход значение после таймера
+    switchChatterDelay = false;//Сбросить таймер
   }
 }
 
 //
 void simistorControl() {
+  //Ситуация когда требуется перейти из режима паниженых оборотов на максимальную мощность
   if (switchChatterEnable && Fan) {
     fanSpeed = 0UL;
     delayStopFan = false;
-    timerSpeedChange.reset();
+    timerSpeedChange.reset();//Сбросить таймер на пониженых оборотов
   }
+  //Таймер на максимальное время работы вентилятора
+  if (timerMaxWorkFan.check(Fan && !offFan, MAX_TIME_WORK_FAN)) {
+    offFan = true;
+  }
+  else if (!switchChatterEnable) {//Сброс таймера после выключения кнопки
+    offFan = false;
+  }
+  //Таймер на включение вентилятора
   if (timerOnFan.check(switchChatterEnable && !Fan, DELAY_START_MOTOR)) {
-    Fan = true;
+    onFan = !offFan;
     fanSpeed = 0UL;
   }
+  //Таймер на переход вентилятора в режим пониженых оборотов после выключения кнопки
   if (timerSpeedChange.check(!switchChatterEnable && Fan, DELAY_DOWNTURN_MOTOR)) {
     fanSpeed = 5000UL;
     delayStopFan = true;
   }
+  //Таймер на выключение вентилятора
   if (timerOffFan.check(!switchChatterEnable && delayStopFan, DELAY_STOP_MOTOR)) {
     delayStopFan = false; 
-    Fan = false;
+    onFan = false;
   }
-
-
+  //Переменная запускающая работу сисистора
+  Fan = onFan && !offFan;
+  //Регулятор режима работы сисистора
   if (Fan && zeroTriggerOn && (micros() - zeroTime) > fanSpeed) {
     digitalWrite(dimerPin, HIGH);
     impulsDelay = micros();
@@ -88,7 +108,6 @@ void simistorControl() {
     digitalWrite(dimerPin, LOW);
     zeroTriggerOff = false;
   }
-
 }
 
 
