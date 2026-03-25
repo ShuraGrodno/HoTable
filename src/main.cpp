@@ -7,6 +7,7 @@
 #define dimerPin 5
 
 const unsigned long DELAY_START_MOTOR = 1000UL;     // * 1000 * 60;
+const unsigned long DELAY_RESTART_MOTOR = 100UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
 const unsigned long DELAY_STOP_MOTOR = 1000UL;      // * 1000 * 60;
 const unsigned long MAX_TIME_WORK_FAN = 1000UL;     // * 1000 * 60;
@@ -23,13 +24,13 @@ bool oldStateSwitch = false;
 
 enum Mode {
   StandBy,
+  OnFan,
   DelayOnFan,
-  DelayOffFan,
-  FanOn,
-  FanOff
+  DelaySpeedChange,
+  DelayOffFan
 };
 
-Mode FanMode = StandBy;
+Mode TimerMode = StandBy;
 bool EnableTimerFan = false;
 unsigned long DelayTimerFan = 0UL;
 bool Fan = false;
@@ -75,75 +76,62 @@ void chatterContact() {
   if (timerSwitchChatter.check(switchChatterDelay, DELAY_SWITCH_CHATTER)) {
     if (switchRoom) {
       if (Fan) {
-        FanMode = FanOn;
+        TimerMode = OnFan;
       }
       else {
-        FanMode = DelayOnFan;
+        TimerMode = DelayOnFan;
       }
     }
     else {
-      FanMode = DelayOffFan;
+      TimerMode = DelaySpeedChange;
     }
-    //switchChatterEnable = switchRoom;//Принять на выход значение после таймера
     switchChatterDelay = false;//Сбросить таймер
   }
 }
 
 //
-void FanControl() {
-  switch (FanMode) {
+void fanControl() {
+
+  switch (TimerMode) {
     case StandBy:
+      break;
+    case OnFan:
+      DelayTimerFan = DELAY_RESTART_MOTOR;
       break;
     case DelayOnFan:
       DelayTimerFan = DELAY_START_MOTOR;
       break;
+    case DelaySpeedChange:
+      DelayTimerFan = DELAY_DOWNTURN_MOTOR;
+      break;
     case DelayOffFan:
       DelayTimerFan = DELAY_STOP_MOTOR;
       break;
-    case FanOn:
-      fanSpeed = 0UL;
-      timerFan.reset();
     default:
-      break;
+    break;
   }
-  if (timerFan.check(FanMode, DelayTimerFan)) {
-    
-    FanMode = StandBy;
+  if (timerFan.check(TimerMode, DelayTimerFan)) {
+    switch (TimerMode) {
+      case OnFan:
+        fanSpeed = 0UL;
+        break;
+      case DelayOnFan:
+        Fan = true;
+        fanSpeed = 0UL;
+        break;
+      case DelaySpeedChange:
+        fanSpeed = 5000UL;
+        break;
+      case DelayOffFan:
+        Fan = false;
+        break;
+      default:
+        break;
+    }
+    TimerMode = StandBy;
   }
 }  
 
-
-//   //Ситуация когда требуется перейти из режима паниженых оборотов на максимальную мощность
-//   if (switchChatterEnable && Fan) {
-//     fanSpeed = 0UL;
-//     delayStopFan = false;
-//     timerSpeedChange.reset();//Сбросить таймер на пониженых оборотов
-//   }
-//   //Таймер на включение вентилятора
-//   if (timerOnFan.check(switchChatterEnable && !Fan, DELAY_START_MOTOR)) {
-//     onFan = !offFan;
-//     fanSpeed = 0UL;
-//   }
-//   //Таймер на переход вентилятора в режим пониженых оборотов после выключения кнопки
-//   if (timerSpeedChange.check(!switchChatterEnable && Fan, DELAY_DOWNTURN_MOTOR)) {
-//     fanSpeed = 5000UL;
-//     delayStopFan = true;
-//   }
-//   //Таймер на выключение вентилятора
-//   if (timerOffFan.check(!switchChatterEnable && delayStopFan, DELAY_STOP_MOTOR)) {
-//     delayStopFan = false; 
-//     onFan = false;
-//   }
-//   //Таймер на максимальное время работы вентилятора
-//   if (timerMaxWorkFan.check(Fan && !offFan, MAX_TIME_WORK_FAN)) {
-//     offFan = true;
-//   }
-//   else if (!switchChatterEnable) {//Сброс таймера после выключения кнопки
-//     offFan = false;
-//   }
-//   //Переменная запускающая работу сисистора
-//   Fan = onFan && !offFan;
-// }
 void simistorControl() {
   //Регулятор режима работы симистора
   if (Fan && zeroTriggerOn && (micros() - zeroTime) > fanSpeed) {
@@ -161,8 +149,8 @@ void simistorControl() {
 
 void loop() {
   chatterContact();
-  FanControl();
+  fanControl();
   simistorControl();
-  // Serial.println(Fan);
+  // Serial.println(TimerMode);
 }
 
