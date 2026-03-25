@@ -11,6 +11,7 @@ const unsigned long DELAY_RESTART_MOTOR = 100UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
 const unsigned long DELAY_STOP_MOTOR = 1000UL;      // * 1000 * 60;
 const unsigned long MAX_TIME_WORK_FAN = 5000UL;     // * 1000 * 60;
+const unsigned long MAX_TIME_PAUZA_FAN = 2000UL; 
 const unsigned long DELAY_SWITCH_CHATTER = 10UL;
 
 volatile unsigned long zeroTime = 0;
@@ -34,10 +35,10 @@ Mode TimerMode = StandBy;
 unsigned long DelayTimerFan = 0UL;
 bool Fan = false;
 bool blokFan = false;
-bool maxWorkFan = false;
 unsigned long fanSpeed = 0UL;
 
 Timer timerMaxWorkFan;
+Timer timerPauzaFan;
 Timer timerSwitchChatter;
 
 Timer timerFan;
@@ -88,11 +89,27 @@ void chatterContact() {
 }
 
 //
-void fanControl() {
-  if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
-    blokFan = true;
-    TimerMode = DelaySpeedChange;
+void fanControl(int Mode) {
+  //
+  switch (Mode) {
+    case 1:
+      if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
+        blokFan = true;
+        TimerMode = DelaySpeedChange;
+      }
+      break;
+    case 2:
+      if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
+        blokFan = true;
+        TimerMode = DelaySpeedChange;
+      }
+      if (timerPauzaFan.check(blokFan, MAX_TIME_PAUZA_FAN)) {
+        blokFan = false;
+        TimerMode = DelayOnFan;
+      }
+      break;
   }
+  //
   switch (TimerMode) {
     case StandBy:
       break;
@@ -109,7 +126,9 @@ void fanControl() {
       DelayTimerFan = DELAY_STOP_MOTOR;
       break;
   }
+  //
   if (timerFan.check(TimerMode, DelayTimerFan)) {
+    //
     switch (TimerMode) {
       case StandBy:
         break;
@@ -153,7 +172,7 @@ void simistorControl() {
 
 void loop() {
   chatterContact();
-  fanControl();
+  fanControl(2);
   simistorControl();
   Serial.println(TimerMode);
 }
