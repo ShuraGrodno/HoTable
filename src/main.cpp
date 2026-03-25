@@ -10,7 +10,7 @@ const unsigned long DELAY_START_MOTOR = 1000UL;     // * 1000 * 60;
 const unsigned long DELAY_RESTART_MOTOR = 100UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
 const unsigned long DELAY_STOP_MOTOR = 1000UL;      // * 1000 * 60;
-const unsigned long MAX_TIME_WORK_FAN = 1000UL;     // * 1000 * 60;
+const unsigned long MAX_TIME_WORK_FAN = 5000UL;     // * 1000 * 60;
 const unsigned long DELAY_SWITCH_CHATTER = 10UL;
 
 volatile unsigned long zeroTime = 0;
@@ -31,18 +31,12 @@ enum Mode {
 };
 
 Mode TimerMode = StandBy;
-bool EnableTimerFan = false;
 unsigned long DelayTimerFan = 0UL;
 bool Fan = false;
-// bool onFan = false;
-// bool offFan = false;
-// bool delayStopFan = false;
-// bool maxWorkFan = false;
+bool blokFan = false;
+bool maxWorkFan = false;
 unsigned long fanSpeed = 0UL;
 
-Timer timerOnFan;
-Timer timerSpeedChange;
-Timer timerOffFan;
 Timer timerMaxWorkFan;
 Timer timerSwitchChatter;
 
@@ -77,13 +71,17 @@ void chatterContact() {
     if (switchRoom) {
       if (Fan) {
         TimerMode = OnFan;
+        blokFan = false;
       }
       else {
         TimerMode = DelayOnFan;
       }
     }
-    else {
+    else if (Fan) {
       TimerMode = DelaySpeedChange;
+    }
+    else {
+      blokFan = false;
     }
     switchChatterDelay = false;//Сбросить таймер
   }
@@ -91,7 +89,10 @@ void chatterContact() {
 
 //
 void fanControl() {
-
+  if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
+    blokFan = true;
+    TimerMode = DelaySpeedChange;
+  }
   switch (TimerMode) {
     case StandBy:
       break;
@@ -128,6 +129,7 @@ void fanControl() {
         break;
       case DelayOffFan:
         Fan = false;
+        blokFan = false;
         TimerMode = StandBy;
         break;
     }
@@ -153,6 +155,6 @@ void loop() {
   chatterContact();
   fanControl();
   simistorControl();
-  // Serial.println(TimerMode);
+  Serial.println(TimerMode);
 }
 
