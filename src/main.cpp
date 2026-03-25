@@ -107,28 +107,30 @@ void fanControl() {
     case DelayOffFan:
       DelayTimerFan = DELAY_STOP_MOTOR;
       break;
-    default:
-    break;
   }
   if (timerFan.check(TimerMode, DelayTimerFan)) {
     switch (TimerMode) {
+      case StandBy:
+        break;
       case OnFan:
         fanSpeed = 0UL;
+        TimerMode = StandBy;
         break;
       case DelayOnFan:
         Fan = true;
         fanSpeed = 0UL;
+        TimerMode = StandBy;
         break;
       case DelaySpeedChange:
         fanSpeed = 5000UL;
+        TimerMode = DelayOffFan;
+        timerFan.reset();
         break;
       case DelayOffFan:
         Fan = false;
-        break;
-      default:
+        TimerMode = StandBy;
         break;
     }
-    TimerMode = StandBy;
   }
 }  
 
