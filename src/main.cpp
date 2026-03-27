@@ -1,11 +1,15 @@
 #include <Arduino.h>
 #include <Timer.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
 
 #define zeroPin 2
 #define restRoomPin 4
 #define bathRoomPin 7
 #define dimerPin 5
 
+const char* ssid = "Xiaomi_040E";
+const char* password = "H8#fqL2@";
 const unsigned long DELAY_START_MOTOR = 1000UL;     // * 1000 * 60;
 const unsigned long DELAY_RESTART_MOTOR = 100UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
@@ -56,6 +60,38 @@ void setup() {
   pinMode(dimerPin, OUTPUT);
   //Обработка прерываний
   attachInterrupt(0, zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
+  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("Connection Failed! Rebooting...");
+    delay(5000);
+    ESP.restart();
+  }
+
+  // Настройка OTA
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+      type = "sketch";
+    else // U_SPIFFS
+      type = "filesystem";
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
+
+  ArduinoOTA.setPassword("admin");  // пароль для защиты
+  ArduinoOTA.begin();
 }
 
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
@@ -171,6 +207,7 @@ void simistorControl() {
 
 
 void loop() {
+  ArduinoOTA.handle();
   chatterContact();
   fanControl(1);
   simistorControl();
