@@ -11,7 +11,7 @@ const unsigned long DELAY_RESTART_MOTOR = 100UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
 const unsigned long DELAY_STOP_MOTOR = 1000UL;      // * 1000 * 60;
 const unsigned long MAX_TIME_WORK_FAN = 5000UL;     // * 1000 * 60;
-const unsigned long MAX_TIME_PAUZA_FAN = 2000UL; 
+const unsigned long MAX_TIME_PAUZA_FAN = 3000UL; 
 const unsigned long DELAY_SWITCH_CHATTER = 10UL;
 
 volatile unsigned long zeroTime = 0;
@@ -37,11 +37,10 @@ bool Fan = false;
 bool blokFan = false;
 unsigned long fanSpeed = 0UL;
 
+Timer timerFan;
 Timer timerMaxWorkFan;
 Timer timerPauzaFan;
 Timer timerSwitchChatter;
-
-Timer timerFan;
 
 //Функция обработки прерывания
 void zeroTriggerISR() {
@@ -55,6 +54,7 @@ void setup() {
   pinMode(restRoomPin, INPUT);
   pinMode(bathRoomPin, INPUT);
   pinMode(dimerPin, OUTPUT);
+  //Обработка прерываний
   attachInterrupt(0, zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
 }
 
@@ -101,11 +101,11 @@ void fanControl(int Mode) {
     case 2:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
         blokFan = true;
-        TimerMode = DelaySpeedChange;
+        Fan = false;
       }
       if (timerPauzaFan.check(blokFan, MAX_TIME_PAUZA_FAN)) {
         blokFan = false;
-        TimerMode = DelayOnFan;
+        Fan = true;
       }
       break;
   }
@@ -172,8 +172,10 @@ void simistorControl() {
 
 void loop() {
   chatterContact();
-  fanControl(2);
+  fanControl(1);
   simistorControl();
-  Serial.println(TimerMode);
+  Serial.print(TimerMode);
+  Serial.print(" ");
+  Serial.println(blokFan);
 }
 
