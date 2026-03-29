@@ -3,13 +3,14 @@
 #include <WiFi.h>
 #include <ArduinoOTA.h>
 
-#define zeroPin 2
-#define restRoomPin 4
-#define bathRoomPin 7
-#define dimerPin 5
+#define zeroPin 4
+#define restRoomPin 25
+#define bathRoomPin 26
+#define dimerPin 27
 
 const char* ssid = "Xiaomi_040E";
 const char* password = "H8#fqL2@";
+
 const unsigned long DELAY_START_MOTOR = 1000UL;     // * 1000 * 60;
 const unsigned long DELAY_RESTART_MOTOR = 100UL;
 const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
@@ -59,7 +60,10 @@ void setup() {
   pinMode(bathRoomPin, INPUT);
   pinMode(dimerPin, OUTPUT);
   //Обработка прерываний
-  attachInterrupt(0, zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
+  attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
     Serial.println("Connection Failed! Rebooting...");
     delay(5000);
@@ -92,6 +96,8 @@ void setup() {
 
   ArduinoOTA.setPassword("admin");  // пароль для защиты
   ArduinoOTA.begin();
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
 }
 
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
@@ -211,8 +217,8 @@ void loop() {
   chatterContact();
   fanControl(1);
   simistorControl();
-  Serial.print(TimerMode);
-  Serial.print(" ");
-  Serial.println(blokFan);
+  // Serial.print(TimerMode);
+  // Serial.print(" ");
+  // Serial.println(blokFan);
 }
 
