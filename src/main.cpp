@@ -2,6 +2,7 @@
 #include <Timer.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
+#include <esp_sleep.h>
 
 #define zeroPin 4
 #define restRoomPin 25
@@ -102,6 +103,8 @@ void setup() {
 
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
 void chatterContact() {
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_25, HIGH);
+  esp_sleep_enable_ext0_wakeup(GPIO_NUM_26, HIGH);
   //Активировать Переменную от любой включеной кнопки
   bool switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
   //Опрос состояния контактов
@@ -154,6 +157,7 @@ void fanControl(int Mode) {
   //
   switch (TimerMode) {
     case StandBy:
+      esp_light_sleep_start();
       break;
     case OnFan:
       DelayTimerFan = DELAY_RESTART_MOTOR;
