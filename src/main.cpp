@@ -4,7 +4,7 @@
 #define zeroPin 2
 #define restRoomPin 4
 #define bathRoomPin 7
-#define dimerPin 5
+#define dimerPin 9
 
 const unsigned long DELAY_START_MOTOR = 1000UL;     // * 1000 * 60;
 const unsigned long DELAY_RESTART_MOTOR = 100UL;
