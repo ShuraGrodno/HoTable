@@ -12,7 +12,7 @@ const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
 const unsigned long DELAY_STOP_MOTOR = 1000UL;      // * 1000 * 60;
 const unsigned long MAX_TIME_WORK_FAN = 5000UL;     // * 1000 * 60;
 const unsigned long MAX_TIME_PAUZA_FAN = 3000UL; 
-const unsigned long DELAY_SWITCH_CHATTER = 10UL;
+const unsigned long DELAY_SWITCH_CHATTER = 100UL;
 
 volatile unsigned long zeroTime = 0;
 volatile bool zeroTriggerOn = false;
@@ -62,13 +62,7 @@ void setup() {
 void chatterContact() {
   //Активировать Переменную от любой включеной кнопки
   bool switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
-  //Опрос состояния контактов
-  if (switchRoom != oldStateSwitch) {
-    oldStateSwitch = switchRoom;
-    switchChatterDelay = true;//Активировать таймер
-  }
-  //Запустить таймен задержки дребезга
-  if (timerSwitchChatter.check(switchChatterDelay, DELAY_SWITCH_CHATTER)) {
+  if (timerSwitchChatter.check(switchRoom != oldStateSwitch, DELAY_SWITCH_CHATTER)) {
     if (switchRoom) {
       if (Fan) {
         TimerMode = OnFan;
@@ -82,9 +76,10 @@ void chatterContact() {
       TimerMode = DelaySpeedChange;
     }
     else {
+      TimerMode = StandBy;
       blokFan = false;
     }
-    switchChatterDelay = false;//Сбросить таймер
+    oldStateSwitch = switchRoom;
   }
 }
 
