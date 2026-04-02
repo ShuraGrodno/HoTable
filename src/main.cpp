@@ -19,7 +19,7 @@ const unsigned long DELAY_STOP_MOTOR = 1000UL;      // * 1000 * 60;
 const unsigned long MAX_TIME_WORK_FAN = 5000UL;     // * 1000 * 60;
 const unsigned long MAX_TIME_PAUZA_FAN = 3000UL; 
 const unsigned long DELAY_SWITCH_CHATTER = 10UL;
-const unsigned long DELAY_STENDBY_SLEEP = 50000UL;
+const unsigned long DELAY_STENDBY_SLEEP = 5000UL;
 
 volatile unsigned long zeroTime = 0;
 volatile bool zeroTriggerOn = false;
@@ -63,6 +63,10 @@ void setup() {
   pinMode(restRoomPin, INPUT);
   pinMode(bathRoomPin, INPUT);
   pinMode(dimerPin, OUTPUT);
+  //
+  uint64_t bitMask = (1ULL << restRoomPin) | (1ULL << bathRoomPin);
+
+  esp_sleep_enable_ext1_wakeup(bitMask, ESP_EXT1_WAKEUP_ANY_HIGH);
   //Обработка прерываний
   attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
 
@@ -89,25 +93,23 @@ void setup() {
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
   });
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("End Failed");
-  });
+  // ArduinoOTA.onError([](ota_error_t error) {
+  //   Serial.printf("Error[%u]: ", error);
+  //   if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+  //   else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+  //   else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+  //   else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+  //   else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  // });
 
   ArduinoOTA.setPassword("admin");  // пароль для защиты
   ArduinoOTA.begin();
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+  // Serial.print("IP address: ");
+  // Serial.println(WiFi.localIP());
 }
 
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
 void chatterContact() {
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_25, HIGH);
-  esp_sleep_enable_ext0_wakeup(GPIO_NUM_26, HIGH);
   //Активировать Переменную от любой включеной кнопки
   switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
   //Запустить таймен задержки дребезга
@@ -157,8 +159,10 @@ void fanControl(int Mode) {
   switch (TimerMode) {
     case StandBy:
       if (timerStandBySleep.check(!switchRoom, DELAY_STENDBY_SLEEP)) {
+        Serial.println("Перевести микроконтроллер в мягкий спящий режим");
         esp_light_sleep_start();
       }
+      // Serial.println("Включен режим ожидания");
       break;
     case OnFan:
       DelayTimerFan = DELAY_RESTART_MOTOR;
@@ -182,21 +186,25 @@ void fanControl(int Mode) {
       case OnFan:
         fanSpeed = 0UL;
         TimerMode = StandBy;
+        Serial.println("Включить вентилятор на максимальные обороты");
         break;
       case DelayOnFan:
         Fan = true;
         fanSpeed = 0UL;
         TimerMode = StandBy;
+        Serial.println("Включить вентилятор после отработки таймера");
         break;
       case DelaySpeedChange:
         fanSpeed = 5000UL;
         TimerMode = DelayOffFan;
         timerFan.reset();
+        Serial.println("Перевести вентилятор в режим пониженых оборотов");
         break;
       case DelayOffFan:
         Fan = false;
         blokFan = false;
         TimerMode = StandBy;
+        Serial.println("Выключить вентилятор");
         break;
     }
   }
@@ -222,8 +230,5 @@ void loop() {
   chatterContact();
   fanControl(1);
   simistorControl();
-  Serial.print(TimerMode);
-  Serial.print(" ");
-  Serial.println(blokFan);
 }
 
