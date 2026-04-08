@@ -1,13 +1,18 @@
 #include <Arduino.h>
 #include <Timer.h>
 #include <WiFi.h>
+#include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <esp_sleep.h>
+#include <NTPClient.h>
 
 #define zeroPin 4
 #define restRoomPin 25
 #define bathRoomPin 26
 #define dimerPin 27
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 3*3600, 60000);
 
 const char* ssid = "Xiaomi_040E";
 const char* password = "H8#fqL2@";
@@ -27,9 +32,10 @@ bool zeroTriggerOff = false;
 unsigned long impulsDelay = 0;
 
 bool switchRoom = false;
-bool switchChatterEnable = false;
-bool switchChatterDelay = false;
 bool oldStateSwitch = false;
+int setAutoWakeupTimer = 0;
+bool blockSetAutoWakeupTimer = false;
+bool nightMode = false;
 
 enum Mode {
   StandBy,
@@ -65,11 +71,11 @@ void setup() {
   pinMode(dimerPin, OUTPUT);
   //
   uint64_t bitMask = (1ULL << restRoomPin) | (1ULL << bathRoomPin);
-
   esp_sleep_enable_ext1_wakeup(bitMask, ESP_EXT1_WAKEUP_ANY_HIGH);
+  
   //Обработка прерываний
   attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
-
+  
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -77,22 +83,22 @@ void setup() {
     delay(5000);
     ESP.restart();
   }
-
+  
   // Настройка OTA
-  ArduinoOTA.onStart([]() {
-    String type;
-    if (ArduinoOTA.getCommand() == U_FLASH)
-      type = "sketch";
-    else // U_SPIFFS
-      type = "filesystem";
-    Serial.println("Start updating " + type);
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
+  // ArduinoOTA.onStart([]() {
+  //   String type;
+  //   if (ArduinoOTA.getCommand() == U_FLASH)
+  //   type = "sketch";
+  //   else // U_SPIFFS
+  //   type = "filesystem";
+  //   Serial.println("Start updating " + type);
+  // });
+  // ArduinoOTA.onEnd([]() {
+  //   Serial.println("\nEnd");
+  // });
+  // ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+  //   Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  // });
   // ArduinoOTA.onError([](ota_error_t error) {
   //   Serial.printf("Error[%u]: ", error);
   //   if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
@@ -101,13 +107,34 @@ void setup() {
   //   else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
   //   else if (error == OTA_END_ERROR) Serial.println("End Failed");
   // });
-
-  ArduinoOTA.setPassword("admin");  // пароль для защиты
-  ArduinoOTA.begin();
-  // Serial.print("IP address: ");
-  // Serial.println(WiFi.localIP());
+  
+  // ArduinoOTA.setPassword("admin");  // пароль для защиты
+  // ArduinoOTA.begin();
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  timeClient.begin();
+  timeClient.update();
+  esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
 }
-
+//
+void timeNight(){
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+    timeClient.update();
+    if (!blockSetAutoWakeupTimer) {
+      esp_sleep_enable_timer_wakeup(60 * 100000);
+      Serial.println("Коректировка таймера автоматическаго пробуждения произведена");
+      blockSetAutoWakeupTimer = true;
+    }
+  }
+  if (timeClient.getSeconds() > 6 && timeClient.getSeconds() < 22) {
+    Serial.println("Начной режим отключен");
+    nightMode = false;
+  }
+  else {
+    Serial.println("Включен начной режим");
+    nightMode = true;
+  }
+}
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
 void chatterContact() {
   //Активировать Переменную от любой включеной кнопки
@@ -159,10 +186,10 @@ void fanControl(int Mode) {
   switch (TimerMode) {
     case StandBy:
       if (timerStandBySleep.check(!switchRoom, DELAY_STENDBY_SLEEP)) {
-        Serial.println("Перевести микроконтроллер в мягкий спящий режим");
+        Serial.println("Перевести микроконтроллер в спящий режим");
+        Serial.flush();
         esp_light_sleep_start();
       }
-      // Serial.println("Включен режим ожидания");
       break;
     case OnFan:
       DelayTimerFan = DELAY_RESTART_MOTOR;
@@ -226,9 +253,12 @@ void simistorControl() {
 
 
 void loop() {
-  ArduinoOTA.handle();
+  // ArduinoOTA.handle();
   chatterContact();
   fanControl(1);
-  simistorControl();
+  timeNight();
+  if (!nightMode) {
+    simistorControl();
+  }
 }
 
