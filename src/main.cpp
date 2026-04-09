@@ -33,6 +33,7 @@ unsigned long impulsDelay = 0;
 
 bool switchRoom = false;
 bool oldStateSwitch = false;
+uint64_t bitMask = (1ULL << restRoomPin) | (1ULL << bathRoomPin);
 int setAutoWakeupTimer = 0;
 bool blockSetAutoWakeupTimer = false;
 bool nightMode = false;
@@ -69,9 +70,6 @@ void setup() {
   pinMode(restRoomPin, INPUT);
   pinMode(bathRoomPin, INPUT);
   pinMode(dimerPin, OUTPUT);
-  //
-  uint64_t bitMask = (1ULL << restRoomPin) | (1ULL << bathRoomPin);
-  esp_sleep_enable_ext1_wakeup(bitMask, ESP_EXT1_WAKEUP_ANY_HIGH);
   
   //Обработка прерываний
   attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
@@ -114,31 +112,24 @@ void setup() {
   Serial.println(WiFi.localIP());
   timeClient.begin();
   timeClient.update();
+  //Настройка таймера пробуждения
   esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
+  Serial.println(60 - timeClient.getMinutes());
+  //Настройка GPIO контактов на пробуждение
+  esp_sleep_enable_ext1_wakeup(bitMask, ESP_EXT1_WAKEUP_ANY_HIGH);
 }
 //
-void timeNight(){
-  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
-    timeClient.update();
-    if (!blockSetAutoWakeupTimer) {
-      esp_sleep_enable_timer_wakeup(60 * 100000);
-      Serial.println("Коректировка таймера автоматическаго пробуждения произведена");
-      blockSetAutoWakeupTimer = true;
-    }
+bool disableNightTime() {
+  while (WiFi.status() != WL_CONNECTED) {
+    WiFi.reconnect();
   }
-  if (timeClient.getSeconds() > 6 && timeClient.getSeconds() < 22) {
-    Serial.println("Начной режим отключен");
-    nightMode = false;
-  }
-  else {
-    Serial.println("Включен начной режим");
-    nightMode = true;
-  }
+  timeClient.update();
+  return (timeClient.getHours() > 6 && timeClient.getHours() < 22);
 }
 //Функция сглаживающая дребезг контактов включателей ванной комнаты и туалета
 void chatterContact() {
   //Активировать Переменную от любой включеной кнопки
-  switchRoom = digitalRead(restRoomPin) || digitalRead(bathRoomPin);
+  switchRoom = disableNightTime() && (digitalRead(restRoomPin) || digitalRead(bathRoomPin));
   //Запустить таймен задержки дребезга
   if (timerSwitchChatter.check(switchRoom != oldStateSwitch, DELAY_SWITCH_CHATTER)) {
     if (switchRoom) {
@@ -185,6 +176,20 @@ void fanControl(int Mode) {
   //
   switch (TimerMode) {
     case StandBy:
+      if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+        while (WiFi.status() != WL_CONNECTED) {
+          WiFi.reconnect();
+        }
+        timeClient.update();
+        if (!timeClient.getMinutes()) {
+          esp_sleep_enable_timer_wakeup(60 * 10000000);
+          Serial.println("Коректировка таймера автоматическаго пробуждения произведена");
+        }
+        else {
+          esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
+          Serial.println(60 - timeClient.getMinutes());
+        }
+      }
       if (timerStandBySleep.check(!switchRoom, DELAY_STENDBY_SLEEP)) {
         Serial.println("Перевести микроконтроллер в спящий режим");
         Serial.flush();
@@ -256,9 +261,6 @@ void loop() {
   // ArduinoOTA.handle();
   chatterContact();
   fanControl(1);
-  timeNight();
-  if (!nightMode) {
-    simistorControl();
-  }
+  simistorControl();
 }
 
