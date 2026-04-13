@@ -3,7 +3,6 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
-#include <esp_sleep.h>
 #include <NTPClient.h>
 
 #define zeroPin 4
@@ -81,33 +80,34 @@ void setup() {
     delay(5000);
     ESP.restart();
   }
+  WiFi.setSleep(false);
   
   // Настройка OTA
-  // ArduinoOTA.onStart([]() {
-  //   String type;
-  //   if (ArduinoOTA.getCommand() == U_FLASH)
-  //   type = "sketch";
-  //   else // U_SPIFFS
-  //   type = "filesystem";
-  //   Serial.println("Start updating " + type);
-  // });
-  // ArduinoOTA.onEnd([]() {
-  //   Serial.println("\nEnd");
-  // });
-  // ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-  //   Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  // });
-  // ArduinoOTA.onError([](ota_error_t error) {
-  //   Serial.printf("Error[%u]: ", error);
-  //   if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-  //   else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-  //   else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-  //   else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-  //   else if (error == OTA_END_ERROR) Serial.println("End Failed");
-  // });
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH)
+    type = "sketch";
+    else // U_SPIFFS
+    type = "filesystem";
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+  });
   
-  // ArduinoOTA.setPassword("admin");  // пароль для защиты
-  // ArduinoOTA.begin();
+  ArduinoOTA.setPassword("admin");  // пароль для защиты
+  ArduinoOTA.begin();
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   timeClient.begin();
@@ -120,9 +120,6 @@ void setup() {
 }
 //
 bool disableNightTime() {
-  while (WiFi.status() != WL_CONNECTED) {
-    WiFi.reconnect();
-  }
   timeClient.update();
   return (timeClient.getHours() > 6 && timeClient.getHours() < 22);
 }
@@ -177,9 +174,6 @@ void fanControl(int Mode) {
   switch (TimerMode) {
     case StandBy:
       if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
-        while (WiFi.status() != WL_CONNECTED) {
-          WiFi.reconnect();
-        }
         timeClient.update();
         if (!timeClient.getMinutes()) {
           esp_sleep_enable_timer_wakeup(60 * 10000000);
@@ -189,11 +183,6 @@ void fanControl(int Mode) {
           esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
           Serial.println(60 - timeClient.getMinutes());
         }
-      }
-      if (timerStandBySleep.check(!switchRoom, DELAY_STENDBY_SLEEP)) {
-        Serial.println("Перевести микроконтроллер в спящий режим");
-        Serial.flush();
-        esp_light_sleep_start();
       }
       break;
     case OnFan:
@@ -256,9 +245,8 @@ void simistorControl() {
   }
 }
 
-
 void loop() {
-  // ArduinoOTA.handle();
+  ArduinoOTA.handle();
   chatterContact();
   fanControl(1);
   simistorControl();
