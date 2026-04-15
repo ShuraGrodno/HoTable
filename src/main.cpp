@@ -105,8 +105,8 @@ void setup() {
     else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
     else if (error == OTA_END_ERROR) Serial.println("End Failed");
   });
-  
-  ArduinoOTA.setPassword("admin");  // пароль для защиты
+  ArduinoOTA.setHostname("esp32_Bathroom");     // Имя микроконтроллера
+  ArduinoOTA.setPassword("admin");              // пароль для защиты
   ArduinoOTA.begin();
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
