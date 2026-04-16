@@ -77,7 +77,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("Connection Failed! Rebooting...");
+    TelnetStream.println("Connection Failed! Rebooting...");
     delay(5000);
     ESP.restart();
   }
@@ -90,33 +90,33 @@ void setup() {
     type = "sketch";
     else // U_SPIFFS
     type = "filesystem";
-    Serial.println("Start updating " + type);
+    TelnetStream.println("Start updating " + type);
   });
   ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
+    TelnetStream.println("\nEnd");
   });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    TelnetStream.printf("Progress: %u%%\r", (progress / (total / 100)));
   });
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-    else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-    else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-    else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-    else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    TelnetStream.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) TelnetStream.println("Auth Failed");
+    else if (error == OTA_BEGIN_ERROR) TelnetStream.println("Begin Failed");
+    else if (error == OTA_CONNECT_ERROR) TelnetStream.println("Connect Failed");
+    else if (error == OTA_RECEIVE_ERROR) TelnetStream.println("Receive Failed");
+    else if (error == OTA_END_ERROR) TelnetStream.println("End Failed");
   });
   ArduinoOTA.setHostname("esp32_Bathroom");     // Имя микроконтроллера
   ArduinoOTA.setPassword("admin");              // пароль для защиты
-  TelnetStream.begin();     // запуск Telnet-сервера
+  TelnetStream.begin();                         // запуск Telnet-сервера
   ArduinoOTA.begin();
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+  TelnetStream.print("IP address: ");
+  TelnetStream.println(WiFi.localIP());
   timeClient.begin();
   timeClient.update();
   //Настройка таймера пробуждения
   esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
-  Serial.println(60 - timeClient.getMinutes());
+  TelnetStream.println(60 - timeClient.getMinutes());
   //Настройка GPIO контактов на пробуждение
   esp_sleep_enable_ext1_wakeup(bitMask, ESP_EXT1_WAKEUP_ANY_HIGH);
 }
@@ -179,11 +179,11 @@ void fanControl(int Mode) {
         timeClient.update();
         if (!timeClient.getMinutes()) {
           esp_sleep_enable_timer_wakeup(60 * 10000000);
-          Serial.println("Коректировка таймера автоматическаго пробуждения произведена");
+          TelnetStream.println("Коректировка таймера автоматическаго пробуждения произведена");
         }
         else {
           esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
-          Serial.println(60 - timeClient.getMinutes());
+          TelnetStream.println(60 - timeClient.getMinutes());
         }
       }
       break;
@@ -209,25 +209,25 @@ void fanControl(int Mode) {
       case OnFan:
         fanSpeed = 0UL;
         TimerMode = StandBy;
-        Serial.println("Включить вентилятор на максимальные обороты");
+        TelnetStream.println("Включить вентилятор на максимальные обороты");
         break;
       case DelayOnFan:
         Fan = true;
         fanSpeed = 0UL;
         TimerMode = StandBy;
-        Serial.println("Включить вентилятор после отработки таймера");
+        TelnetStream.println("Включить вентилятор после отработки таймера");
         break;
       case DelaySpeedChange:
         fanSpeed = 5000UL;
         TimerMode = DelayOffFan;
         timerFan.reset();
-        Serial.println("Перевести вентилятор в режим пониженых оборотов");
+        TelnetStream.println("Перевести вентилятор в режим пониженых оборотов");
         break;
       case DelayOffFan:
         Fan = false;
         blokFan = false;
         TimerMode = StandBy;
-        Serial.println("Выключить вентилятор");
+        TelnetStream.println("Выключить вентилятор");
         break;
     }
   }
@@ -248,7 +248,9 @@ void simistorControl() {
 }
 
 void loop() {
-  // TelnetStream.handle();
+  if (TelnetStream.available()) {
+    TelnetStream.read();
+  }
   ArduinoOTA.handle();
   chatterContact();
   fanControl(1);
