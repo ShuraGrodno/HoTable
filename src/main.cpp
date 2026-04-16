@@ -157,16 +157,19 @@ void fanControl(int Mode) {
   switch (Mode) {
     case 1:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
+        TelnetStream.println("Достигнут максимальное время работы вентилятора");
         blokFan = true;
         TimerMode = DelaySpeedChange;
       }
       break;
     case 2:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
+        TelnetStream.println("Достигнут максимальное время работы вентилятора. Остановить вентилятор на паузу");
         blokFan = true;
         Fan = false;
       }
       if (timerPauzaFan.check(blokFan, MAX_TIME_PAUZA_FAN)) {
+        TelnetStream.println("Пауза окончена. Включить вентилятор на максимальные обороты");
         blokFan = false;
         Fan = true;
       }
@@ -248,10 +251,10 @@ void simistorControl() {
 }
 
 void loop() {
+  ArduinoOTA.handle();
   if (TelnetStream.available()) {
     TelnetStream.read();
   }
-  ArduinoOTA.handle();
   chatterContact();
   fanControl(1);
   simistorControl();
