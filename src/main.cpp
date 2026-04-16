@@ -37,10 +37,6 @@ unsigned long impulsDelay = 0;
 
 bool switchRoom = false;
 bool oldStateSwitch = false;
-uint64_t bitMask = (1ULL << restRoomPin) | (1ULL << bathRoomPin);
-int setAutoWakeupTimer = 0;
-bool blockSetAutoWakeupTimer = false;
-bool nightMode = false;
 
 enum Mode {
   StandBy,
