@@ -117,12 +117,6 @@ void setup() {
   TelnetStream.print("IP address: ");
   TelnetStream.println(WiFi.localIP());
   timeClient.begin();
-  timeClient.update();
-  //Настройка таймера пробуждения
-  esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
-  TelnetStream.println(60 - timeClient.getMinutes());
-  //Настройка GPIO контактов на пробуждение
-  esp_sleep_enable_ext1_wakeup(bitMask, ESP_EXT1_WAKEUP_ANY_HIGH);
 }
 //
 bool disableNightTime() {
@@ -182,17 +176,6 @@ void fanControl(int Mode) {
   //
   switch (TimerMode) {
     case StandBy:
-      if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
-        timeClient.update();
-        if (!timeClient.getMinutes()) {
-          esp_sleep_enable_timer_wakeup(60 * 10000000);
-          TelnetStream.println("Коректировка таймера автоматическаго пробуждения произведена");
-        }
-        else {
-          esp_sleep_enable_timer_wakeup((60 - timeClient.getMinutes()) * 1000000);
-          TelnetStream.println(60 - timeClient.getMinutes());
-        }
-      }
       break;
     case OnFan:
       DelayTimerFan = DELAY_RESTART_MOTOR;
