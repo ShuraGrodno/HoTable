@@ -2,6 +2,7 @@
 #include <Timer.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <TelnetStream.h>
 #include <ArduinoOTA.h>
 #include <NTPClient.h>
 
@@ -107,6 +108,7 @@ void setup() {
   });
   ArduinoOTA.setHostname("esp32_Bathroom");     // Имя микроконтроллера
   ArduinoOTA.setPassword("admin");              // пароль для защиты
+  TelnetStream.begin();     // запуск Telnet-сервера
   ArduinoOTA.begin();
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
@@ -246,6 +248,7 @@ void simistorControl() {
 }
 
 void loop() {
+  // TelnetStream.handle();
   ArduinoOTA.handle();
   chatterContact();
   fanControl(1);
