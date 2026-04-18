@@ -174,7 +174,7 @@ void simistorControl() {
     zeroTriggerOn = false;
     zeroTriggerOff = true;
   }
-  if (zeroTriggerOff && (micros() - impulsDelay) > 350) {
+  if (zeroTriggerOff && (micros() - impulsDelay) > 300) {
     digitalWrite(dimerPin, LOW);
     zeroTriggerOff = false;
   }
@@ -225,7 +225,7 @@ void setup() {
   pinMode(dimerPin, OUTPUT);
   digitalWrite(dimerPin, LOW);
 
-  attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING);  //LOW,CHANGE,RISING,FALLING
 
   // ---- I2C для OLED ----
   Wire.begin(OLED_SDA, OLED_SCL);
