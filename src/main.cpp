@@ -71,7 +71,7 @@ Timer timerSwitchChatter;
 Timer timerStandBySleep;
 
 // ----- Прерывание детектора нуля -----
-void ICACHE_RAM_ATTR zeroTriggerISR() {
+void IRAM_ATTR zeroTriggerISR() {
   zeroTime = micros();
   zeroTriggerOn = true;
 }
@@ -109,19 +109,19 @@ void fanControl(int Mode) {
   switch (Mode) {
     case 1:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
-        TelnetStream.println("Достигнут максимальное время работы вентилятора");
+        Serial.println("Достигнут максимальное время работы вентилятора");
         blokFan = true;
         TimerMode = DelaySpeedChange;
       }
       break;
     case 2:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
-        TelnetStream.println("Достигнут максимум. Остановить вентилятор на паузу");
+        Serial.println("Достигнут максимум. Остановить вентилятор на паузу");
         blokFan = true;
         Fan = false;
       }
       if (timerPauzaFan.check(blokFan, MAX_TIME_PAUZA_FAN)) {
-        TelnetStream.println("Пауза окончена. Включить на максимум");
+        Serial.println("Пауза окончена. Включить на максимум");
         blokFan = false;
         Fan = true;
       }
@@ -142,25 +142,25 @@ void fanControl(int Mode) {
       case OnFan:
         fanSpeed = 0UL;
         TimerMode = StandBy;
-        TelnetStream.println("Включить вентилятор на максимальные обороты");
+        Serial.println("Включить вентилятор на максимальные обороты");
         break;
       case DelayOnFan:
         Fan = true;
         fanSpeed = 0UL;
         TimerMode = StandBy;
-        TelnetStream.println("Включить вентилятор после таймера");
+        Serial.println("Включить вентилятор после таймера");
         break;
       case DelaySpeedChange:
         fanSpeed = 5000UL;
         TimerMode = DelayOffFan;
         timerFan.reset();
-        TelnetStream.println("Перевести на пониженные обороты");
+        Serial.println("Перевести на пониженные обороты");
         break;
       case DelayOffFan:
         Fan = false;
         blokFan = false;
         TimerMode = StandBy;
-        TelnetStream.println("Выключить вентилятор");
+        Serial.println("Выключить вентилятор");
         break;
     }
   }
@@ -193,11 +193,11 @@ void updateOLED() {
   oled.print(Fan ? "ON " : "OFF");
   oled.print("  Mode: ");
   switch (TimerMode) {
-    case StandBy:        oled.print("STBY"); break;
-    case OnFan:          oled.print("ON  "); break;
-    case DelayOnFan:     oled.print("dON "); break;
-    case DelaySpeedChange: oled.print("dSPD"); break;
-    case DelayOffFan:    oled.print("dOFF"); break;
+    case StandBy:           oled.print("STBY"); break;
+    case OnFan:             oled.print("ON  "); break;
+    case DelayOnFan:        oled.print("dON "); break;
+    case DelaySpeedChange:  oled.print("dSPD"); break;
+    case DelayOffFan:       oled.print("dOFF"); break;
   }
 
   oled.setCursor(0, 25);
