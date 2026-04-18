@@ -225,11 +225,7 @@ void setup() {
   pinMode(dimerPin, OUTPUT);
   digitalWrite(dimerPin, LOW);
 
-<<<<<<< HEAD
   attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING);  //LOW,CHANGE,RISING,FALLING
-=======
-  attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, RISING);
->>>>>>> 049b0369305b6f773fa3d9230b7f8ab8aac246c1
 
   // ---- I2C для OLED ----
   Wire.begin(OLED_SDA, OLED_SCL);
