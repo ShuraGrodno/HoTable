@@ -16,15 +16,15 @@
 #include <Wire.h>
 
 // ----- Настройка пинов для ESP8266 (NodeMCU v2/v3) -----
-#define zeroPin        14      // D5  (GPIO14) - детектор нуля (прерывание)
+#define zeroPin        5       // D1  (GPIO15) - детектор нуля (прерывание)
 #define restRoomPin    12      // D6  (GPIO12) - кнопка туалета
 #define bathRoomPin    13      // D7  (GPIO13) - кнопка ванной
 #define dimerPin       16      // D0  (GPIO16) - управление симистором (только выход)
 
-// ----- I2C для OLED (обычно SDA=GPIO4, SCL=GPIO5) -----
-#define OLED_SDA       4       // D2
-#define OLED_SCL       5       // D1
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+// ----- I2C для OLED (обычно SDA=GPI12, SCL=GPI14) -----
+#define OLED_SDA       12       // D6
+#define OLED_SCL       14       // D5
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, OLED_SCL, OLED_SDA, U8X8_PIN_NONE);
 
 // ----- Остальные константы -----
 WiFiUDP ntpUDP;
