@@ -1,35 +1,36 @@
 #include <Arduino.h>
-#include <Timer.h>                // ваш собственный класс Timer (должен быть в папке проекта)
-#if defined(ESP8266)
+// ----- Библиотека таймер --------
+#include <Timer.h>
+// ----- Библиотеки для подключению к WiFi ------------
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#elif defined(ESP32)
-#include <WiFi.h>
-#endif
+// ----- Библиотека для просмотра Serial Monitor через WiFi ------
 #include <TelnetStream.h>
+// ----- Библиотека для загрузки прошивок по безпроводному протоколу -------
 #include <ArduinoOTA.h>
+// ----- Библиотека для загрузки с портала "pool.ntp.org" времени -----
 #include <NTPClient.h>
-
 // ----- Библиотека для OLED 0.96" (U8g2) -----
 #include <U8g2lib.h>
 #include <Wire.h>
 
 // ----- Настройка пинов для ESP8266 (NodeMCU v2/v3) -----
-#define zeroPin        5       // D1  (GPIO15) - детектор нуля (прерывание)
-#define restRoomPin    12      // D6  (GPIO12) - кнопка туалета
+#define zeroPin        5       // D1  (GPIO05) - детектор нуля (прерывание)
+#define restRoomPin    15      // D8  (GPIO15) - кнопка туалета
 #define bathRoomPin    13      // D7  (GPIO13) - кнопка ванной
-#define dimerPin       16      // D0  (GPIO16) - управление симистором (только выход)
+#define dimerPin       4       // D2  (GPIO04) - управление симистором (только выход)
 
 // ----- I2C для OLED (обычно SDA=GPI12, SCL=GPI14) -----
 #define OLED_SDA       12       // D6
 #define OLED_SCL       14       // D5
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, OLED_SCL, OLED_SDA, U8X8_PIN_NONE);
+U8G2_SSD1306_128X64_NONAME_F_SW_I2C oled(U8G2_R0, /* clock=*/ OLED_SCL, /* data=*/ OLED_SDA, /* reset=*/ U8X8_PIN_NONE);
 
 // ----- Остальные константы -----
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 3*3600, 60000);
 
+// ----- Данные точки доступа WiFi --------
 const char* ssid = "Xiaomi_040E";
 const char* password = "H8#fqL2@";
 
@@ -41,6 +42,8 @@ const unsigned long MAX_TIME_WORK_FAN     = 5000UL;
 const unsigned long MAX_TIME_PAUZA_FAN    = 3000UL;
 const unsigned long DELAY_SWITCH_CHATTER  = 10UL;
 const unsigned long DELAY_STENDBY_SLEEP   = 5000UL;
+
+static unsigned long lastUpd_OLedDisplay = 0;
 
 volatile unsigned long zeroTime = 0;
 volatile bool zeroTriggerOn = false;
@@ -157,6 +160,7 @@ void fanControl(int Mode) {
         Serial.println("Перевести на пониженные обороты");
         break;
       case DelayOffFan:
+        fanSpeed = 10000UL;
         Fan = false;
         blokFan = false;
         TimerMode = StandBy;
@@ -182,38 +186,36 @@ void simistorControl() {
 
 // ----- Вывод информации на OLED -----
 void updateOLED() {
-  static unsigned long lastUpdate = 0;
-  if (millis() - lastUpdate < 200) return;  // обновляем 5 раз в секунду
-  lastUpdate = millis();
+  if (millis() - lastUpd_OLedDisplay < 10) return;
+  lastUpd_OLedDisplay = millis();
+ 
+  oled.firstPage();
+  do{
+    oled.setCursor(0, 10);
+    oled.print("Fan: ");
+    oled.print(Fan ? "ON " : "OFF");
+    oled.print("  Mode: ");
+    switch (TimerMode) {
+      case StandBy:           oled.print("STBY"); break;
+      case OnFan:             oled.print("ONFa"); break;
+      case DelayOnFan:        oled.print("dONF"); break;
+      case DelaySpeedChange:  oled.print("dSCH"); break;
+      case DelayOffFan:       oled.print("dOFF"); break;
+    }
 
-  oled.clearBuffer();
-  oled.setFont(u8g2_font_6x10_tf);
-  oled.setCursor(0, 10);
-  oled.print("Fan: ");
-  oled.print(Fan ? "ON " : "OFF");
-  oled.print("  Mode: ");
-  switch (TimerMode) {
-    case StandBy:           oled.print("STBY"); break;
-    case OnFan:             oled.print("ON  "); break;
-    case DelayOnFan:        oled.print("dON "); break;
-    case DelaySpeedChange:  oled.print("dSPD"); break;
-    case DelayOffFan:       oled.print("dOFF"); break;
-  }
+    oled.setCursor(0, 25);
+    oled.print("Speed: ");
+    oled.print(map(fanSpeed, 0, 10000, 100, 0));
+    oled.print(" %");
 
-  oled.setCursor(0, 25);
-  oled.print("Speed: ");
-  oled.print(fanSpeed);
-  oled.print(" us");
+    oled.setCursor(0, 40);
+    oled.print("IP: ");
+    oled.print(WiFi.localIP());
 
-  oled.setCursor(0, 40);
-  oled.print("IP: ");
-  oled.print(WiFi.localIP());
-
-  oled.setCursor(0, 55);
-  timeClient.update();
-  oled.print(timeClient.getFormattedTime());
-
-  oled.sendBuffer();
+    oled.setCursor(0, 55);
+    timeClient.update();
+    oled.print(timeClient.getFormattedTime());
+  } while(oled.nextPage());
 }
 
 // ----- Setup -----
@@ -231,10 +233,13 @@ void setup() {
   Wire.begin(OLED_SDA, OLED_SCL);
   oled.begin();
   oled.setPowerSave(0);
-  oled.clearBuffer();
-  oled.setFont(u8g2_font_6x10_tf);
-  oled.drawStr(0, 10, "Connecting WiFi...");
-  oled.sendBuffer();
+  oled.setFont(u8g2_font_ncenB08_tr);
+  
+  oled.firstPage();
+  do{
+    oled.setCursor(0, 10);
+    oled.print("Loading...");
+  } while(oled.nextPage());
 
   // ---- WiFi ----
   WiFi.mode(WIFI_STA);
@@ -244,6 +249,8 @@ void setup() {
     Serial.print(".");
   }
   Serial.println("\nWiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
   WiFi.setSleepMode(WIFI_NONE_SLEEP);   // отключаем энергосбережение для стабильности OTA
 
   // ---- OTA ----
@@ -271,27 +278,18 @@ void setup() {
 
   // ---- TelnetStream ----
   TelnetStream.begin();
-  TelnetStream.print("IP address: ");
-  TelnetStream.println(WiFi.localIP());
-
+  // ----- NTPClient ------
   timeClient.begin();
-
-  // ---- Вывод на OLED готовности ----
-  oled.clearBuffer();
-  oled.drawStr(0, 10, "WiFi OK");
-  oled.drawStr(0, 25, WiFi.localIP().toString().c_str());
-  oled.sendBuffer();
-  delay(2000);
 }
 
 // ----- Loop -----
 void loop() {
   ArduinoOTA.handle();
   if (TelnetStream.available()) {
-    TelnetStream.read();   // поддержка Telnet-соединения
+    TelnetStream.read();
   }
   chatterContact();
-  fanControl(1);           // режим 1 (простой таймер максимальной работы)
+  fanControl(1);
   simistorControl();
   updateOLED();
 }
