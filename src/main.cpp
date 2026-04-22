@@ -65,7 +65,7 @@ Mode TimerMode = StandBy;
 unsigned long DelayTimerFan = 0UL;
 bool Fan = false;
 bool blokFan = false;
-unsigned long fanSpeed = 0UL;
+unsigned long fanSpeed = 10000UL;
 
 Timer timerFan;
 Timer timerMaxWorkFan;
