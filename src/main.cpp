@@ -14,6 +14,9 @@
 // ----- Библиотека для OLED 0.96" (U8g2) -----
 #include <U8g2lib.h>
 #include <Wire.h>
+// ----- Библиотеки для разделения процессов выполнение програмы по приоритету ---------
+#include <FreeRTOS.h> // Подключаем FreeRTOS
+#include <task.h>     // И библиотеку задач
 
 // ----- Настройка пинов для ESP8266 (NodeMCU v2/v3) -----
 #define zeroPin        5       // D1  (GPIO05) - детектор нуля (прерывание)
@@ -36,14 +39,11 @@ const char* password = "H8#fqL2@";
 
 const unsigned long DELAY_START_MOTOR     = 1000UL;
 const unsigned long DELAY_RESTART_MOTOR   = 100UL;
-const unsigned long DELAY_DOWNTURN_MOTOR  = 1000UL;
-const unsigned long DELAY_STOP_MOTOR      = 1000UL;
-const unsigned long MAX_TIME_WORK_FAN     = 5000UL;
+const unsigned long DELAY_DOWNTURN_MOTOR  = 2000UL;
+const unsigned long DELAY_STOP_MOTOR      = 2000UL;
+const unsigned long MAX_TIME_WORK_FAN     = 10000UL;
 const unsigned long MAX_TIME_PAUZA_FAN    = 3000UL;
 const unsigned long DELAY_SWITCH_CHATTER  = 10UL;
-const unsigned long DELAY_STENDBY_SLEEP   = 5000UL;
-
-static unsigned long lastUpd_OLedDisplay = 0;
 
 volatile unsigned long zeroTime = 0;
 volatile bool zeroTriggerOn = false;
@@ -71,19 +71,54 @@ Timer timerFan;
 Timer timerMaxWorkFan;
 Timer timerPauzaFan;
 Timer timerSwitchChatter;
-Timer timerStandBySleep;
-
-// ----- Прерывание детектора нуля -----
-void IRAM_ATTR zeroTriggerISR() {
-  zeroTime = micros();
-  zeroTriggerOn = true;
-}
+Timer timerUpdateDisplay;
 
 // ----- Функция разрешения работы по времени суток -----
 bool disableNightTime() {
   timeClient.update();
   int hour = timeClient.getHours();
   return (hour > 6 && hour < 22);
+}
+
+// ----- Вывод информации на OLED -----
+void updateOLED() {
+  oled.firstPage();
+  do{
+    oled.setCursor(0, 10);
+    oled.print("Fan: ");
+    oled.print(Fan ? "ON " : "OFF");
+    oled.print("  Mode: ");
+    switch (TimerMode) {
+      case StandBy:           oled.print("STBY"); break;
+      case OnFan:             oled.print("ONFa"); break;
+      case DelayOnFan:        oled.print("dONF"); break;
+      case DelaySpeedChange:  oled.print("dSCH"); break;
+      case DelayOffFan:       oled.print("dOFF"); break;
+    }
+
+    oled.setCursor(0, 25);
+    oled.print("Night: ");
+    oled.print(disableNightTime() ? "OFF" : "ON");
+
+    oled.setCursor(0, 40);
+    oled.print("Speed: ");
+    oled.print(map(fanSpeed, 0, 10000, 100, 0));
+    oled.print(" %");
+
+    oled.setCursor(0, 55);
+    oled.print("IP: ");
+    oled.print(WiFi.localIP());
+
+    // oled.setCursor(0, 70);
+    // timeClient.update();
+    // oled.print(timeClient.getFormattedTime());
+  } while(oled.nextPage());
+}
+
+// ----- Прерывание детектора нуля -----
+void IRAM_ATTR zeroTriggerISR() {
+  zeroTime = micros();
+  zeroTriggerOn = true;
 }
 
 // ----- Устранение дребезга контактов -----
@@ -141,7 +176,7 @@ void fanControl(int Mode) {
 
   if (timerFan.check(TimerMode != StandBy, DelayTimerFan)) {
     switch (TimerMode) {
-      case StandBy: break;
+      case StandBy: updateOLED(); break;
       case OnFan:
         fanSpeed = 0UL;
         TimerMode = StandBy;
@@ -167,6 +202,7 @@ void fanControl(int Mode) {
         Serial.println("Выключить вентилятор");
         break;
     }
+    updateOLED();
   }
 }
 
@@ -182,40 +218,6 @@ void simistorControl() {
     digitalWrite(dimerPin, LOW);
     zeroTriggerOff = false;
   }
-}
-
-// ----- Вывод информации на OLED -----
-void updateOLED() {
-  if (millis() - lastUpd_OLedDisplay < 10) return;
-  lastUpd_OLedDisplay = millis();
- 
-  oled.firstPage();
-  do{
-    oled.setCursor(0, 10);
-    oled.print("Fan: ");
-    oled.print(Fan ? "ON " : "OFF");
-    oled.print("  Mode: ");
-    switch (TimerMode) {
-      case StandBy:           oled.print("STBY"); break;
-      case OnFan:             oled.print("ONFa"); break;
-      case DelayOnFan:        oled.print("dONF"); break;
-      case DelaySpeedChange:  oled.print("dSCH"); break;
-      case DelayOffFan:       oled.print("dOFF"); break;
-    }
-
-    oled.setCursor(0, 25);
-    oled.print("Speed: ");
-    oled.print(map(fanSpeed, 0, 10000, 100, 0));
-    oled.print(" %");
-
-    oled.setCursor(0, 40);
-    oled.print("IP: ");
-    oled.print(WiFi.localIP());
-
-    oled.setCursor(0, 55);
-    timeClient.update();
-    oled.print(timeClient.getFormattedTime());
-  } while(oled.nextPage());
 }
 
 // ----- Setup -----
@@ -280,6 +282,8 @@ void setup() {
   TelnetStream.begin();
   // ----- NTPClient ------
   timeClient.begin();
+  // ----- Обновить экран ------
+  updateOLED();
 }
 
 // ----- Loop -----
@@ -291,5 +295,4 @@ void loop() {
   chatterContact();
   fanControl(1);
   simistorControl();
-  updateOLED();
 }

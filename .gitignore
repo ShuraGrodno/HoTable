@@ -7,3 +7,4 @@
 include/README
 test/README
 lib/README
+TempFile.cpp
