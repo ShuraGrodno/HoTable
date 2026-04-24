@@ -1,10 +1,6 @@
 #include <Arduino.h>
 #include <Timer.h>
-#if defined(ESP32)
 #include <WiFi.h>
-#elif defined(ESP8266)
-#include <ESP8266WiFi.h>
-#endif
 #include <WiFiUdp.h>
 #include <TelnetStream.h>
 #include <ArduinoOTA.h>
@@ -18,25 +14,25 @@
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 3*3600, 60000);
 
-const char* ssid = "Xiaomi_040E";
-const char* password = "H8#fqL2@";
+const char* ssid                          = "Xiaomi_040E";
+const char* password                      = "H8#fqL2@";
 
-const unsigned long DELAY_START_MOTOR = 1000UL;     // * 1000 * 60;
-const unsigned long DELAY_RESTART_MOTOR = 100UL;
-const unsigned long DELAY_DOWNTURN_MOTOR = 1000UL;  // * 1000 * 60;
-const unsigned long DELAY_STOP_MOTOR = 1000UL;      // * 1000 * 60;
-const unsigned long MAX_TIME_WORK_FAN = 5000UL;     // * 1000 * 60;
-const unsigned long MAX_TIME_PAUZA_FAN = 3000UL; 
-const unsigned long DELAY_SWITCH_CHATTER = 10UL;
-const unsigned long DELAY_STENDBY_SLEEP = 5000UL;
+const unsigned long DELAY_START_MOTOR     = 1000UL;
+const unsigned long DELAY_RESTART_MOTOR   = 100UL;
+const unsigned long DELAY_DOWNTURN_MOTOR  = 1000UL;
+const unsigned long DELAY_STOP_MOTOR      = 1000UL;
+const unsigned long MAX_TIME_WORK_FAN     = 5000UL;
+const unsigned long MAX_TIME_PAUZA_FAN    = 3000UL; 
+const unsigned long DELAY_SWITCH_CHATTER  = 10UL;
+const unsigned long DELAY_STENDBY_SLEEP   = 5000UL;
 
-volatile unsigned long zeroTime = 0;
-volatile bool zeroTriggerOn = false;
-bool zeroTriggerOff = false;
-unsigned long impulsDelay = 0;
+volatile unsigned long zeroTime           = 0;
+volatile bool zeroTriggerOn               = false;
+bool zeroTriggerOff                       = false;
+unsigned long impulsDelay                 = 0;
 
-bool switchRoom = false;
-bool oldStateSwitch = false;
+bool switchRoom                           = false;
+bool oldStateSwitch                       = false;
 
 enum Mode {
   StandBy,
@@ -46,11 +42,11 @@ enum Mode {
   DelayOffFan
 };
 
-Mode TimerMode = StandBy;
-unsigned long DelayTimerFan = 0UL;
-bool Fan = false;
-bool blokFan = false;
-unsigned long fanSpeed = 0UL;
+Mode TimerMode                            = StandBy;
+unsigned long DelayTimerFan               = 0UL;
+bool Fan                                  = false;
+bool blokFan                              = false;
+unsigned long fanSpeed                    = 0UL;
 
 Timer timerFan;
 Timer timerMaxWorkFan;
@@ -64,6 +60,7 @@ void zeroTriggerISR() {
   zeroTriggerOn = true;
 }
 
+//Настройка и запуск
 void setup() {
   Serial.begin(115200);
   pinMode(zeroPin, INPUT);
@@ -74,6 +71,7 @@ void setup() {
   //Обработка прерываний
   attachInterrupt(digitalPinToInterrupt(zeroPin), zeroTriggerISR, FALLING); //LOW,CHANGE,RISING,FALLING
   
+  //Подключение к Wi-Fi сети
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -81,6 +79,8 @@ void setup() {
     delay(5000);
     ESP.restart();
   }
+
+  //Отключить режим сна Wi-Fi для обеспечения стабильной работы
   WiFi.setSleep(false);
   
   // Настройка OTA
@@ -114,7 +114,7 @@ void setup() {
   TelnetStream.println(WiFi.localIP());
   timeClient.begin();
 }
-//
+//Функция отключающая работу вентилятора в ночное время
 bool disableNightTime() {
   timeClient.update();
   return (timeClient.getHours() > 6 && timeClient.getHours() < 22);
@@ -145,10 +145,11 @@ void chatterContact() {
   }
 }
 
-//
+//Функция управления вентилятором
 void fanControl(int Mode) {
-  //
+  //Выбор режима работы вентилятора
   switch (Mode) {
+    //Режим работы вентилятора с отключением после достижения максимального времени работы
     case 1:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
         TelnetStream.println("Достигнут максимальное время работы вентилятора");
@@ -156,6 +157,7 @@ void fanControl(int Mode) {
         TimerMode = DelaySpeedChange;
       }
       break;
+    //Режим работы вентилятора с паузой после достижения максимального времени работы
     case 2:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
         TelnetStream.println("Достигнут максимальное время работы вентилятора. Остановить вентилятор на паузу");
@@ -171,20 +173,11 @@ void fanControl(int Mode) {
   }
   //
   switch (TimerMode) {
-    case StandBy:
-      break;
-    case OnFan:
-      DelayTimerFan = DELAY_RESTART_MOTOR;
-      break;
-    case DelayOnFan:
-      DelayTimerFan = DELAY_START_MOTOR;
-      break;
-    case DelaySpeedChange:
-      DelayTimerFan = DELAY_DOWNTURN_MOTOR;
-      break;
-    case DelayOffFan:
-      DelayTimerFan = DELAY_STOP_MOTOR;
-      break;
+    case StandBy: break;
+    case OnFan:             DelayTimerFan = DELAY_RESTART_MOTOR;   break;
+    case DelayOnFan:        DelayTimerFan = DELAY_START_MOTOR;     break;
+    case DelaySpeedChange:  DelayTimerFan = DELAY_DOWNTURN_MOTOR;  break;
+    case DelayOffFan:       DelayTimerFan = DELAY_STOP_MOTOR;      break;
   }
   //
   if (timerFan.check(TimerMode, DelayTimerFan)) {
