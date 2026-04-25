@@ -14,15 +14,15 @@
 // ----- Библиотека для OLED 0.96" (U8g2) -----
 #include <U8g2lib.h>
 #include <Wire.h>
-// ----- Библиотеки для разделения процессов выполнение програмы по приоритету ---------
-#include <FreeRTOS.h> // Подключаем FreeRTOS
-#include <task.h>     // И библиотеку задач
 
 // ----- Настройка пинов для ESP8266 (NodeMCU v2/v3) -----
 #define zeroPin        5       // D1  (GPIO05) - детектор нуля (прерывание)
 #define restRoomPin    15      // D8  (GPIO15) - кнопка туалета
 #define bathRoomPin    13      // D7  (GPIO13) - кнопка ванной
 #define dimerPin       4       // D2  (GPIO04) - управление симистором (только выход)
+
+// ---------------- OLED ----------------
+unsigned long lastDisplay                  = 0;
 
 // ----- I2C для OLED (обычно SDA=GPI12, SCL=GPI14) -----
 #define OLED_SDA       12       // D6
@@ -34,24 +34,24 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 3*3600, 60000);
 
 // ----- Данные точки доступа WiFi --------
-const char* ssid = "Xiaomi_040E";
-const char* password = "H8#fqL2@";
+const char* ssid                          = "Xiaomi_040E";
+const char* password                      = "H8#fqL2@";
 
 const unsigned long DELAY_START_MOTOR     = 1000UL;
 const unsigned long DELAY_RESTART_MOTOR   = 100UL;
 const unsigned long DELAY_DOWNTURN_MOTOR  = 2000UL;
-const unsigned long DELAY_STOP_MOTOR      = 2000UL;
+const unsigned long DELAY_STOP_MOTOR      = 5000UL;
 const unsigned long MAX_TIME_WORK_FAN     = 10000UL;
 const unsigned long MAX_TIME_PAUZA_FAN    = 3000UL;
 const unsigned long DELAY_SWITCH_CHATTER  = 10UL;
 
-volatile unsigned long zeroTime = 0;
-volatile bool zeroTriggerOn = false;
-bool zeroTriggerOff = false;
-unsigned long impulsDelay = 0;
+volatile unsigned long zeroTime           = 0;
+volatile bool zeroTriggerOn               = false;
+bool zeroTriggerOff                       = false;
+unsigned long impulsDelay                 = 0;
 
-bool switchRoom = false;
-bool oldStateSwitch = false;
+bool switchRoom                           = false;
+bool oldStateSwitch                       = false;
 
 enum Mode {
   StandBy,
@@ -61,17 +61,21 @@ enum Mode {
   DelayOffFan
 };
 
-Mode TimerMode = StandBy;
-unsigned long DelayTimerFan = 0UL;
-bool Fan = false;
-bool blokFan = false;
-unsigned long fanSpeed = 10000UL;
+Mode TimerMode                            = StandBy;
+unsigned long DelayTimerFan               = 0UL;
+bool Fan                                  = false;
+bool blokFan                              = false;
+unsigned long fanSpeed                    = 10000UL;
+
+// ---------------- ПЛАВНОСТЬ ----------------
+unsigned long lastRamp                    = 0UL;
+unsigned long targetSpeed                 = 0UL;
+
 
 Timer timerFan;
 Timer timerMaxWorkFan;
 Timer timerPauzaFan;
 Timer timerSwitchChatter;
-Timer timerUpdateDisplay;
 
 // ----- Функция разрешения работы по времени суток -----
 bool disableNightTime() {
@@ -85,33 +89,16 @@ void updateOLED() {
   oled.firstPage();
   do{
     oled.setCursor(0, 10);
-    oled.print("Fan: ");
-    oled.print(Fan ? "ON " : "OFF");
-    oled.print("  Mode: ");
-    switch (TimerMode) {
-      case StandBy:           oled.print("STBY"); break;
-      case OnFan:             oled.print("ONFa"); break;
-      case DelayOnFan:        oled.print("dONF"); break;
-      case DelaySpeedChange:  oled.print("dSCH"); break;
-      case DelayOffFan:       oled.print("dOFF"); break;
-    }
-
+    timeClient.update();
+    oled.print(timeClient.getFormattedTime());
+    
     oled.setCursor(0, 25);
     oled.print("Night: ");
     oled.print(disableNightTime() ? "OFF" : "ON");
-
+    
     oled.setCursor(0, 40);
-    oled.print("Speed: ");
-    oled.print(map(fanSpeed, 0, 10000, 100, 0));
-    oled.print(" %");
-
-    oled.setCursor(0, 55);
     oled.print("IP: ");
     oled.print(WiFi.localIP());
-
-    // oled.setCursor(0, 70);
-    // timeClient.update();
-    // oled.print(timeClient.getFormattedTime());
   } while(oled.nextPage());
 }
 
@@ -119,6 +106,15 @@ void updateOLED() {
 void IRAM_ATTR zeroTriggerISR() {
   zeroTime = micros();
   zeroTriggerOn = true;
+}
+
+// ================= Плавный набор и снижение оборотов двигателя =================
+void updateSpeedSmooth() {
+  if (millis() - lastRamp < 5) return;
+  lastRamp = millis();
+
+  if (fanSpeed < targetSpeed) fanSpeed += 50;
+  else if (fanSpeed > targetSpeed) fanSpeed -= 50;
 }
 
 // ----- Устранение дребезга контактов -----
@@ -143,16 +139,16 @@ void chatterContact() {
 }
 
 // ----- Управление вентилятором (таймеры максимальной работы/паузы) -----
-void fanControl(int Mode) {
+void fanControl(bool Mode) {
   switch (Mode) {
-    case 1:
+    case false:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
         Serial.println("Достигнут максимальное время работы вентилятора");
         blokFan = true;
         TimerMode = DelaySpeedChange;
       }
       break;
-    case 2:
+    case true:
       if (timerMaxWorkFan.check(Fan && !blokFan, MAX_TIME_WORK_FAN)) {
         Serial.println("Достигнут максимум. Остановить вентилятор на паузу");
         blokFan = true;
@@ -176,33 +172,34 @@ void fanControl(int Mode) {
 
   if (timerFan.check(TimerMode != StandBy, DelayTimerFan)) {
     switch (TimerMode) {
-      case StandBy: updateOLED(); break;
+      case StandBy: break;
       case OnFan:
-        fanSpeed = 0UL;
+        targetSpeed = 0UL;
         TimerMode = StandBy;
         Serial.println("Включить вентилятор на максимальные обороты");
         break;
       case DelayOnFan:
         Fan = true;
-        fanSpeed = 0UL;
+        targetSpeed = 0UL;
         TimerMode = StandBy;
         Serial.println("Включить вентилятор после таймера");
         break;
       case DelaySpeedChange:
-        fanSpeed = 5000UL;
+        targetSpeed = 5000UL;
         TimerMode = DelayOffFan;
         timerFan.reset();
         Serial.println("Перевести на пониженные обороты");
         break;
       case DelayOffFan:
-        fanSpeed = 10000UL;
-        Fan = false;
-        blokFan = false;
-        TimerMode = StandBy;
-        Serial.println("Выключить вентилятор");
+        targetSpeed = 10000UL;
+        if (fanSpeed == targetSpeed) {
+          Fan = false;
+          blokFan = false;
+          TimerMode = StandBy;
+          Serial.println("Выключить вентилятор");
+        }
         break;
     }
-    updateOLED();
   }
 }
 
@@ -277,7 +274,6 @@ void setup() {
     else if (error == OTA_END_ERROR) TelnetStream.println("End Failed");
   });
   ArduinoOTA.begin();
-
   // ---- TelnetStream ----
   TelnetStream.begin();
   // ----- NTPClient ------
@@ -293,6 +289,12 @@ void loop() {
     TelnetStream.read();
   }
   chatterContact();
-  fanControl(1);
+  fanControl(false);
+  updateSpeedSmooth();
   simistorControl();
+  if (!Fan && (millis() - lastDisplay > 100)) {
+    lastDisplay = millis();
+    updateOLED();
+  }
+  yield();
 }
